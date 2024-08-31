@@ -1,4 +1,5 @@
 use autoglyph::c2;
+
 const CONTENT: &'static str = r#"-L|F7
 7S-7|
 L|7||
