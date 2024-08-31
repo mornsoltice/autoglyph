@@ -19,79 +19,168 @@ impl Grid {
             }
             chars.push(chs);
         }
-
         let h = chars.len() as isize;
         let w = chars.first().unwrap().len() as isize;
-
         let g = Self { chars, w, h };
-
         (start, g)
     }
 
-    fn recursive_coordinates(&self, (x, y): (isize, isize)) -> (isize, isize) {
-        let mut nx = x % self.w;
-        let mut ny = y % self.h;
-
-        if nx < 0 {
-            nx += self.w;
-        }
-
-        if ny < 0 {
-            ny += self.h;
-        }
-
-        (nx, ny)
-    }
-
     fn get(&self, (x, y): (isize, isize)) -> char {
-        let (nx, ny) = self.recursive_coordinates((x, y));
-        self.chars[ny as usize][nx as usize]
+        if x < 0 || y < 0 || x >= self.w || y >= self.h {
+            return '.';
+        }
+        self.chars[y as usize][x as usize]
     }
 }
 
-fn step(positions: &HashSet<(isize, isize)>, grid: &Grid) -> HashSet<(isize, isize)> {
-    let mut new_positions = HashSet::new();
-    for (x, y) in positions {
-        for (dx, dy) in [(0, 1), (0, -1), (1, 0), (-1, 0)] {
-            let nx = x + dx;
-            let ny = y + dy;
+fn connected_pipes(grid: &Grid, (x, y): (isize, isize)) -> Vec<(isize, isize)> {
+    let mut connected = Vec::new();
+    let current = grid.get((x, y));
 
-            let c = grid.get((nx, ny));
-
-            if c == '#' {
-                continue;
+    match current {
+        '|' => {
+            if "F7|S".contains(grid.get((x, y - 1))) {
+                connected.push((x, y - 1));
             }
+            if "JL|S".contains(grid.get((x, y + 1))) {
+                connected.push((x, y + 1));
+            }
+        }
+        '-' => {
+            if "FL-S".contains(grid.get((x - 1, y))) {
+                connected.push((x - 1, y));
+            }
+            if "J7-S".contains(grid.get((x + 1, y))) {
+                connected.push((x + 1, y));
+            }
+        }
+        'L' => {
+            if "F7|S".contains(grid.get((x, y - 1))) {
+                connected.push((x, y - 1));
+            }
+            if "J7-S".contains(grid.get((x + 1, y))) {
+                connected.push((x + 1, y));
+            }
+        }
+        'J' => {
+            if "F7|S".contains(grid.get((x, y - 1))) {
+                connected.push((x, y - 1));
+            }
+            if "FL-S".contains(grid.get((x - 1, y))) {
+                connected.push((x - 1, y));
+            }
+        }
+        '7' => {
+            if "JL|S".contains(grid.get((x, y + 1))) {
+                connected.push((x, y + 1));
+            }
+            if "FL-S".contains(grid.get((x - 1, y))) {
+                connected.push((x - 1, y));
+            }
+        }
+        'F' => {
+            if "JL|S".contains(grid.get((x, y + 1))) {
+                connected.push((x, y + 1));
+            }
+            if "J7-S".contains(grid.get((x + 1, y))) {
+                connected.push((x + 1, y));
+            }
+        }
+        'S' => {
+            for (dx, dy) in [(0, -1), (0, 1), (-1, 0), (1, 0)] {
+                let nx = x + dx;
+                let ny = y + dy;
+                if connected_pipes(grid, (nx, ny)).contains(&(x, y)) {
+                    connected.push((nx, ny));
+                }
+            }
+        }
+        _ => {}
+    }
 
-            new_positions.insert((nx, ny));
+    connected
+}
+
+fn find_loop(grid: &Grid, start: (isize, isize)) -> HashSet<(isize, isize)> {
+    let mut loop_tiles = HashSet::new();
+    let mut current = start;
+    loop_tiles.insert(current);
+
+    loop {
+        let next_positions = connected_pipes(grid, current);
+        let next = next_positions.iter().find(|&pos| !loop_tiles.contains(pos));
+
+        match next {
+            Some(&pos) => {
+                current = pos;
+                loop_tiles.insert(current);
+            }
+            None => break,
+        }
+
+        if current == start {
+            break;
         }
     }
 
-    new_positions
+    loop_tiles
 }
 
 pub fn part1(content: &str) -> usize {
     let (start, grid) = Grid::parse(content);
-
-    let mut positions = HashSet::new();
-    positions.insert(start);
-
-    for _i in 0..4 {
-        positions = step(&positions, &grid);
-    }
-
-    positions.len()
+    let loop_tiles = find_loop(&grid, start);
+    loop_tiles.len() / 2
 }
 
-pub fn part2(content: &str, use_all_steps: bool) -> usize {
+pub fn part2(content: &str, _use_all_steps: bool) -> usize {
     let (start, grid) = Grid::parse(content);
+    let loop_tiles = find_loop(&grid, start);
 
-    let mut positions = HashSet::new();
-    positions.insert(start);
-
-    let steps = if use_all_steps { 10 } else { 4 };
-    for _i in 0..steps {
-        positions = step(&positions, &grid);
+    let mut inside_count = 0;
+    for y in 0..grid.h {
+        let mut inside = false;
+        let mut last_corner = ' ';
+        for x in 0..grid.w {
+            if loop_tiles.contains(&(x, y)) {
+                let mut tile = grid.get((x, y));
+                if tile == 'S' {
+                    // Determine the correct pipe type for 'S'
+                    let connected = connected_pipes(&grid, (x, y));
+                    tile = match (
+                        connected[0].0 - x,
+                        connected[0].1 - y,
+                        connected[1].0 - x,
+                        connected[1].1 - y,
+                    ) {
+                        (0, -1, 0, 1) | (0, 1, 0, -1) => '|',
+                        (-1, 0, 1, 0) | (1, 0, -1, 0) => '-',
+                        (0, -1, 1, 0) | (1, 0, 0, -1) => 'L',
+                        (0, -1, -1, 0) | (-1, 0, 0, -1) => 'J',
+                        (0, 1, 1, 0) | (1, 0, 0, 1) => 'F',
+                        (0, 1, -1, 0) | (-1, 0, 0, 1) => '7',
+                        _ => panic!("Invalid 'S' connection"),
+                    };
+                }
+                match tile {
+                    '|' => inside = !inside,
+                    'F' | 'L' => last_corner = tile,
+                    '7' => {
+                        if last_corner == 'L' {
+                            inside = !inside
+                        }
+                    }
+                    'J' => {
+                        if last_corner == 'F' {
+                            inside = !inside
+                        }
+                    }
+                    _ => {}
+                }
+            } else if inside {
+                inside_count += 1;
+            }
+        }
     }
 
-    positions.len()
+    inside_count
 }
