@@ -1,8 +1,4 @@
-use itertools::Itertools;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
-use rayon::prelude::*;
-use std::collections::HashSet;
+use std::{collections::HashSet, isize};
 
 pub struct Grid {
     chars: Vec<Vec<char>>,
@@ -55,13 +51,8 @@ impl Grid {
 
 fn step(positions: &HashSet<(isize, isize)>, grid: &Grid) -> HashSet<(isize, isize)> {
     let mut new_positions = HashSet::new();
-    let mut rng = thread_rng(); // For randomization
-
     for (x, y) in positions {
-        let mut directions = [(0, 1), (0, -1), (1, 0), (-1, 0)];
-        directions.shuffle(&mut rng); // Shuffle the directions to introduce randomness
-
-        for (dx, dy) in directions {
+        for (dx, dy) in [(0, 1), (0, -1), (1, 0), (-1, 0)] {
             let nx = x + dx;
             let ny = y + dy;
 
@@ -78,23 +69,28 @@ fn step(positions: &HashSet<(isize, isize)>, grid: &Grid) -> HashSet<(isize, isi
     new_positions
 }
 
-pub fn part1(content: &str, steps: usize) -> usize {
+pub fn part1(content: &str) -> usize {
     let (start, grid) = Grid::parse(content);
 
     let mut positions = HashSet::new();
     positions.insert(start);
 
-    // Added debug output for each step
-    for step_num in 0..steps {
+    for _i in 0..4 {
         positions = step(&positions, &grid);
-        if step_num % 10 == 0 {
-            // Adjust frequency as needed
-            println!(
-                "Step {}: Positions Count: {}",
-                step_num + 1,
-                positions.len()
-            );
-        }
+    }
+
+    positions.len()
+}
+
+pub fn part2(content: &str, use_all_steps: bool) -> usize {
+    let (start, grid) = Grid::parse(content);
+
+    let mut positions = HashSet::new();
+    positions.insert(start);
+
+    let steps = if use_all_steps { 10 } else { 4 };
+    for _i in 0..steps {
+        positions = step(&positions, &grid);
     }
 
     positions.len()
